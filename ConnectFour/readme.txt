@@ -1,18 +1,23 @@
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from IPython.display import display
 
-# Use your existing DataFrame
+# ==========================================================
+# NEW CUSTOMER FIELD ANALYSIS
+# ==========================================================
+
+# Use the DataFrame already loaded in your notebook
 data = df.copy()
 
-# Exact column names from your dataset
 DATE_COL = "SDate"
 NEW_COL = "NewCustomer"
 
-# Clean data
-data[DATE_COL] = pd.to_datetime(data[DATE_COL], errors="coerce")
+# Clean dates and customer flags
+data[DATE_COL] = pd.to_datetime(
+    data[DATE_COL], errors="coerce"
+)
 
 data["NewCustomer_Clean"] = (
     data[NEW_COL]
@@ -29,35 +34,47 @@ data["NewCustomer_Clean"] = (
 
 data = data.dropna(subset=[DATE_COL])
 
-# Use latest date available in your data
+if data.empty:
+    raise ValueError("No valid SDate values found.")
+
+# Use the latest available date in the dataset
 end_date = data[DATE_COL].max().normalize()
 
+print("=" * 55)
+print("NEW CUSTOMER FIELD ANALYSIS")
+print("Latest Date in Dataset:", end_date.date())
+print("=" * 55)
+
+# ==========================================================
+# 1. TIME PERIOD SUMMARY
+# ==========================================================
+
 periods = {
-    "Last 7 Days": end_date - pd.Timedelta(days=7),
+    "Last 7 Days": end_date - pd.Timedelta(days=6),
     "Last 1 Month": end_date - pd.DateOffset(months=1),
     "Last 3 Months": end_date - pd.DateOffset(months=3),
     "Last 6 Months": end_date - pd.DateOffset(months=6),
-    "Last 12 Months": end_date - pd.DateOffset(months=12)
+    "Last 12 Months": end_date - pd.DateOffset(months=12),
+    "Last 2 Years": end_date - pd.DateOffset(years=2)
 }
 
-# Calculate percentages
 results = []
 
-for name, start_date in periods.items():
+for period, start_date in periods.items():
 
     subset = data[
-        (data[DATE_COL] > start_date) &
+        (data[DATE_COL] >= start_date) &
         (data[DATE_COL] < end_date + pd.Timedelta(days=1))
     ]
 
     valid = subset["NewCustomer_Clean"].dropna()
 
-    true_count = (valid == True).sum()
-    false_count = (valid == False).sum()
+    true_count = int((valid == True).sum())
+    false_count = int((valid == False).sum())
     total = len(valid)
 
     results.append({
-        "Period": name,
+        "Period": period,
         "Total Records": len(subset),
         "True Count": true_count,
         "False Count": false_count,
@@ -70,67 +87,119 @@ for name, start_date in periods.items():
 
 summary = pd.DataFrame(results)
 
-print("NEW CUSTOMER FIELD ANALYSIS")
-print("Latest date in dataset:", end_date.date())
 display(summary)
 
-# Visualization 1: True vs False by time period
-ax = (
-    summary.set_index("Period")[["True %", "False %"]]
-    .plot(
-        kind="bar",
-        stacked=True,
-        figsize=(12, 6),
-        color=["steelblue", "coral"]
-    )
+# ==========================================================
+# 2. PLOTLY STACKED BAR CHART
+# ==========================================================
+
+fig = go.Figure()
+
+fig.add_trace(go.Bar(
+    name="True",
+    x=summary["Period"],
+    y=summary["True %"],
+    marker_color="#2E86AB",
+    text=summary["True %"].map(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    ),
+    textposition="inside",
+    hovertemplate="%{x}<br>True: %{y:.2f}%<extra></extra>"
+))
+
+fig.add_trace(go.Bar(
+    name="False",
+    x=summary["Period"],
+    y=summary["False %"],
+    marker_color="#E07A5F",
+    text=summary["False %"].map(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    ),
+    textposition="inside",
+    hovertemplate="%{x}<br>False: %{y:.2f}%<extra></extra>"
+))
+
+fig.update_layout(
+    title="New Customer Flag | True vs False",
+    barmode="stack",
+    yaxis_title="Percentage of Records (%)",
+    xaxis_title="",
+    yaxis=dict(range=[0, 100]),
+    template="plotly_white",
+    height=500,
+    legend_title="NewCustomer",
+    hovermode="x unified"
 )
 
-plt.title("NewCustomer: True vs False by Time Period")
-plt.ylabel("Percentage of Records (%)")
-plt.xlabel("")
-plt.ylim(0, 100)
-plt.xticks(rotation=0)
-plt.legend(title="NewCustomer")
-plt.grid(axis="y", alpha=0.2)
-plt.tight_layout()
-plt.show()
+fig.show()
 
-# Visualization 2: Monthly trend
-monthly = data.dropna(subset=["NewCustomer_Clean"]).copy()
-monthly["Month"] = monthly[DATE_COL].dt.to_period("M")
+# ==========================================================
+# 3. MONTHLY TREND - LAST 24 MONTHS
+# ==========================================================
+
+monthly = data[
+    (data[DATE_COL] >= periods["Last 2 Years"]) &
+    (data[DATE_COL] < end_date + pd.Timedelta(days=1))
+].copy()
+
+monthly["Month"] = (
+    monthly[DATE_COL].dt.to_period("M").dt.to_timestamp()
+)
 
 monthly_summary = (
     monthly.groupby("Month")["NewCustomer_Clean"]
     .agg(
-        Total="count",
+        Total=lambda x: x.notna().sum(),
         True_Count=lambda x: (x == True).sum(),
         False_Count=lambda x: (x == False).sum()
     )
+    .reset_index()
 )
 
-monthly_summary["True %"] = (
-    monthly_summary["True_Count"]
-    / monthly_summary["Total"] * 100
+monthly_summary["True %"] = np.where(
+    monthly_summary["Total"] > 0,
+    monthly_summary["True_Count"] /
+    monthly_summary["Total"] * 100,
+    np.nan
 )
 
-monthly_summary["False %"] = (
-    monthly_summary["False_Count"]
-    / monthly_summary["Total"] * 100
+monthly_summary["False %"] = np.where(
+    monthly_summary["Total"] > 0,
+    monthly_summary["False_Count"] /
+    monthly_summary["Total"] * 100,
+    np.nan
 )
 
 print("\nMONTHLY NEW CUSTOMER TREND")
-display(monthly_summary.tail(18))
+display(monthly_summary.round(2))
 
-monthly_summary["True %"].tail(18).plot(
-    figsize=(12, 5),
-    marker="o",
-    linewidth=2
+fig2 = go.Figure()
+
+fig2.add_trace(go.Scatter(
+    x=monthly_summary["Month"],
+    y=monthly_summary["True %"],
+    mode="lines+markers",
+    name="NewCustomer = True",
+    line=dict(color="#2E86AB", width=3),
+    marker=dict(size=7),
+    customdata=monthly_summary[["True_Count", "Total"]],
+    hovertemplate=(
+        "%{x|%B %Y}<br>"
+        "True: %{y:.2f}%<br>"
+        "True Records: %{customdata[0]:,}<br>"
+        "Valid Records: %{customdata[1]:,}"
+        "<extra></extra>"
+    )
+))
+
+fig2.update_layout(
+    title="Monthly Trend | New Customers (Last 2 Years)",
+    xaxis_title="Month",
+    yaxis_title="NewCustomer = True (%)",
+    yaxis=dict(range=[0, 100]),
+    template="plotly_white",
+    height=500,
+    hovermode="x unified"
 )
 
-plt.title("Monthly Percentage of NewCustomer = True")
-plt.xlabel("Month")
-plt.ylabel("New Customer (%)")
-plt.ylim(0, 100)
-plt.grid(alpha=0.3)
-plt.tight_layout()
-plt.show()
+fig2.show()
