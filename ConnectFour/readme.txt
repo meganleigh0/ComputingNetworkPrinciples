@@ -3,89 +3,66 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 
-from sklearn.cluster import (
-    KMeans, Birch, MiniBatchKMeans
-)
-from sklearn.mixture import GaussianMixture
-from sklearn.metrics import (
-    silhouette_score,
-    davies_bouldin_score
-)
+# Change to "cluster" to analyze the original 7 groups
+GROUP = "group5"
 
-rng = np.random.default_rng(42)
-idx = rng.choice(
-    len(Xw),
-    size=min(15000, len(Xw)),
-    replace=False
-)
-X_test = Xw[idx]
-
-results = []
-
-models = {
-    "K-Means (7)": KMeans(
-        n_clusters=7, n_init=10, random_state=42
-    ),
-    "K-Means (9)": KMeans(
-        n_clusters=9, n_init=10, random_state=42
-    ),
-    "MiniBatch K-Means (9)": MiniBatchKMeans(
-        n_clusters=9, n_init=10, random_state=42
-    ),
-    "BIRCH (9)": Birch(
-        n_clusters=9
-    ),
-    "Gaussian Mixture (9)": GaussianMixture(
-        n_components=9,
-        covariance_type="diag",
-        reg_covar=1e-5,
-        random_state=42
-    )
+METRICS = {
+    "Average project spend": "avg_project_sales",
+    "Rooms per project": "avg_rooms_per_project",
+    "Premium purchases": "premium_share",
+    "Mattress purchases": "mattress_share",
+    "Online purchases": "web_share",
+    "Promotional purchases": "promo_rate",
+    "Protection attachment": "protection_rate",
+    "Repeat projects/year": "projects_per_year"
 }
 
-for name, model in models.items():
-    try:
-        labels = model.fit_predict(X_test)
-        n_clusters = len(np.unique(labels))
+available = {
+    label: col
+    for label, col in METRICS.items()
+    if col in df.columns
+}
 
-        if n_clusters < 2:
-            continue
+cols = list(available.values())
 
-        results.append({
-            "Model": name,
-            "Clusters": n_clusters,
-            "Silhouette": silhouette_score(
-                X_test, labels,
-                sample_size=min(3000, len(X_test)),
-                random_state=42
-            ),
-            "Davies-Bouldin":
-                davies_bouldin_score(X_test, labels),
-            "Smallest Cluster %":
-                pd.Series(labels).value_counts(
-                    normalize=True
-                ).min() * 100
-        })
-    except Exception as e:
-        print(f"{name} failed: {e}")
-
-comparison = pd.DataFrame(results)
-comparison = comparison.sort_values(
-    "Silhouette", ascending=False
+work = df[[GROUP] + cols].copy()
+work[cols] = work[cols].apply(
+    pd.to_numeric, errors="coerce"
 )
 
-print("CUSTOMER SEGMENTATION: MODEL COMPARISON")
-display(comparison.round(3))
+# Mean of each behavior across customers
+overall = work[cols].mean()
 
-fig = px.scatter(
-    comparison,
-    x="Davies-Bouldin",
-    y="Silhouette",
-    color="Model",
-    size="Smallest Cluster %",
-    hover_data=["Clusters"],
-    title="Clustering Algorithm Comparison",
-    template="plotly_white"
+# Mean behavior within each customer segment
+segment_means = work.groupby(GROUP)[cols].mean()
+
+# 100 = overall customer average
+index = segment_means.div(
+    overall.replace(0, np.nan)
+).mul(100)
+
+index = index.rename(
+    columns={v: k for k, v in available.items()}
 )
+
+fig = px.imshow(
+    index,
+    color_continuous_scale="RdBu",
+    color_continuous_midpoint=100,
+    aspect="auto",
+    text_auto=".0f",
+    labels={
+        "x": "Customer Behavior",
+        "y": "Customer Segment",
+        "color": "Index"
+    },
+    title="Customer Behavior Index | 100 = Average"
+)
+
+fig.update_layout(
+    template="plotly_white",
+    height=550,
+    xaxis_tickangle=-30
+)
+
 fig.show()
-
