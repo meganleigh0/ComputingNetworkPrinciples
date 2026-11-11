@@ -1,70 +1,90 @@
 
-from sklearn.cluster import KMeans
-from sklearn.metrics import (
-    silhouette_score,
-    davies_bouldin_score,
-    adjusted_rand_score
-)
 import numpy as np
 import pandas as pd
 import plotly.express as px
 
-rng = np.random.default_rng(SEED)
+from sklearn.cluster import (
+    KMeans, Birch, MiniBatchKMeans
+)
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import (
+    silhouette_score,
+    davies_bouldin_score
+)
 
-# Fixed sample for comparable K evaluations
+rng = np.random.default_rng(42)
 idx = rng.choice(
     len(Xw),
     size=min(15000, len(Xw)),
     replace=False
 )
-X_sample = Xw[idx]
+X_test = Xw[idx]
 
 results = []
 
-for k in range(3, 11):
-    model1 = KMeans(
-        n_clusters=k, n_init=10,
+models = {
+    "K-Means (7)": KMeans(
+        n_clusters=7, n_init=10, random_state=42
+    ),
+    "K-Means (9)": KMeans(
+        n_clusters=9, n_init=10, random_state=42
+    ),
+    "MiniBatch K-Means (9)": MiniBatchKMeans(
+        n_clusters=9, n_init=10, random_state=42
+    ),
+    "BIRCH (9)": Birch(
+        n_clusters=9
+    ),
+    "Gaussian Mixture (9)": GaussianMixture(
+        n_components=9,
+        covariance_type="diag",
+        reg_covar=1e-5,
         random_state=42
-    ).fit(X_sample)
+    )
+}
 
-    model2 = KMeans(
-        n_clusters=k, n_init=10,
-        random_state=123
-    ).fit(X_sample)
+for name, model in models.items():
+    try:
+        labels = model.fit_predict(X_test)
+        n_clusters = len(np.unique(labels))
 
-    labels = model1.labels_
+        if n_clusters < 2:
+            continue
 
-    results.append({
-        "K": k,
-        "Silhouette": silhouette_score(
-            X_sample, labels,
-            sample_size=min(3000, len(X_sample)),
-            random_state=42
-        ),
-        "Davies-Bouldin": davies_bouldin_score(
-            X_sample, labels
-        ),
-        "Stability_ARI": adjusted_rand_score(
-            model1.labels_, model2.labels_
-        ),
-        "Smallest_Cluster_%":
-            pd.Series(labels).value_counts(
-                normalize=True
-            ).min() * 100
-    })
+        results.append({
+            "Model": name,
+            "Clusters": n_clusters,
+            "Silhouette": silhouette_score(
+                X_test, labels,
+                sample_size=min(3000, len(X_test)),
+                random_state=42
+            ),
+            "Davies-Bouldin":
+                davies_bouldin_score(X_test, labels),
+            "Smallest Cluster %":
+                pd.Series(labels).value_counts(
+                    normalize=True
+                ).min() * 100
+        })
+    except Exception as e:
+        print(f"{name} failed: {e}")
 
-evaluation = pd.DataFrame(results)
-
-print("CLUSTER VALIDATION")
-display(evaluation.round(3))
-
-fig = px.line(
-    evaluation,
-    x="K",
-    y=["Silhouette", "Stability_ARI"],
-    markers=True,
-    title="Cluster Quality and Initialization Stability"
+comparison = pd.DataFrame(results)
+comparison = comparison.sort_values(
+    "Silhouette", ascending=False
 )
-fig.update_layout(template="plotly_white")
-fig.show()
 
+print("CUSTOMER SEGMENTATION: MODEL COMPARISON")
+display(comparison.round(3))
+
+fig = px.scatter(
+    comparison,
+    x="Davies-Bouldin",
+    y="Silhouette",
+    color="Model",
+    size="Smallest Cluster %",
+    hover_data=["Clusters"],
+    title="Clustering Algorithm Comparison",
+    template="plotly_white"
+)
+fig.show()
