@@ -1,6 +1,7 @@
-Executive & Advanced Analytics
-What were the three largest contributors to the company's year-over-year sales change last month?
-Which stores are underperforming relative to the company average across sales growth, traffic, and conversion?
-How much of our revenue growth this year came from e-commerce versus physical stores?
-Which product categories have declining sales despite increasing inventory levels?
-What are the five most significant measurable performance changes this week compared to last week?
+25 Business Intelligence Questions for Claude AI Agent
+Objective: Develop a conversational AI agent connected to Gardner White's SQL data warehouse that can accurately answer business questions involving sales, store performance, customers, products, inventory, and executive-level analytics.
+Sales & Revenue
+What were total net sales across all stores last week?
+How do last week's net sales compare to the same week last year?
+Which five stores generated the highest net sales last month?
+What were total net sales by product category last quarter?
