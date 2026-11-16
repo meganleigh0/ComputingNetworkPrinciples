@@ -1,1 +1,6 @@
-Investigate the entire GW-APP-Service-Report repository to determine exactly how Shop Service Completion Rate and Road Service Completion Rate are calculated. Search all R, SQL, Quarto, and configuration files, including sourced modules and helper functions. Trace both metrics from the database queries through transformations to the displayed output. Identify the exact numerator, denominator, filters, completion-status definitions, date logic, grouping, and joins. Cite file paths and line numbers for every finding. Determine whether this repository produces the Static Quarto 'Dashboard - Operations: Service' published in Posit Connect or whether it is a different application. Do not infer or invent missing formulas. If the calculations are absent, identify the closest related logic and specify exactly what additional source code or information is required to reproduce both metrics in SQL.
+Executive & Advanced Analytics
+What were the three largest contributors to the company's year-over-year sales change last month?
+Which stores are underperforming relative to the company average across sales growth, traffic, and conversion?
+How much of our revenue growth this year came from e-commerce versus physical stores?
+Which product categories have declining sales despite increasing inventory levels?
+What are the five most significant measurable performance changes this week compared to last week?
